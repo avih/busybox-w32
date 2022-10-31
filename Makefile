@@ -1,7 +1,11 @@
 VERSION = 1
 PATCHLEVEL = 37
 SUBLEVEL = 0
-EXTRAVERSION = .git
+# note that EXTRAVERSION assumes 'cc' represents this build (for -dumpmachine)
+MERGEBASE = $(shell git merge-base master HEAD)
+EXTRAVERSION ?= .git-$(shell CDM=$$(cc -dumpmachine); echo "$$(git describe --match FRP ${MERGEBASE})+$$(git rev-list --count ${MERGEBASE}..HEAD)@avih.$${CDM%%-*}")
+EXTRAVERSION := ${EXTRAVERSION}
+# $(info ${EXTRAVERSION})
 NAME = Unnamed
 
 # Colon is used as a separator in makefiles.  Strip any drive prefix
