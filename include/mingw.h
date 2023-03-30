@@ -3,13 +3,14 @@
 #define IMPL(name,ret,retval,...) static inline ret name(__VA_ARGS__) { return retval; }
 
 const char *bbpath_to_w32(const char *fname, char *maybe_dst, size_t siz);
-char *bbpath_to_w32_inplace(char *fname);
-// converts /X/... to X:/... in an anonymous ad-hoc automatic-storage buffer.
-// convention: use w32f[_inplace] only in functions which use it in win API.
+char *bbpath_to_w32_inplace_4plus(char *fname);
+// converts /X[/...] to X:/[...] in an ad-hoc automatic-storage buffer.
+// the result length is always same as the input, except in "/X" -> "X:/"
+// convention: use w32f[_inplace..] only in functions which use it in win API.
 // consecutive calls are no-op (value is modified at most once - on 1st call).
 // consecutive calls are cheap in CPU (but still add MAX_PATH on stack).
 #define w32f(fname) bbpath_to_w32((fname), (char[MAX_PATH]){}, MAX_PATH)
-#define w32f_inplace bbpath_to_w32_inplace  /* inplace, NULL or any size */
+#define w32f_inplace_4plus bbpath_to_w32_inplace_4plus  /* requires siz >= 4*/
 
 /*
  * sys/types.h

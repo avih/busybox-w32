@@ -184,11 +184,15 @@ char *strsignal(int sig)
 }
 
 #define HAS_W32_FAKE_ROOT(f) \
-	(f && f[0] == '/' && f[1] && f[2] == '/' && isalpha(f[1]))
+	(f && f[0] == '/' && f[1] && (!f[2] || f[2] == '/') && isalpha(f[1]))
+
+#define W32_FAKE_ROOT_EXTENDS(f) /* conversion needs more space /X -> X:/ */ \
+	(f && f[0] == '/' && f[1] && !f[2] && isalpha(f[1]))
 
 // convert unix-style absolute path /<letter>/... to windows <letter>:/...
-// returns fname, or, if fname begins with "/X/" and fits siz (with \0),
-// return maybe_dst with a modified version of fname which begins with "X:/".
+// returns fname, or, if fname begins with "/X/" or is "/X" and fits siz
+// (with \0), return maybe_dst with a version of fname which begins with "X:/".
+// note that /X becomes the root of drive X, and not "current dir on drive X".
 // maybe_dst must be at least siz bytes, and not overlap with fname
 const char *bbpath_to_w32(const char *fname, char *maybe_dst, size_t siz)
 {
@@ -198,18 +202,28 @@ const char *bbpath_to_w32(const char *fname, char *maybe_dst, size_t siz)
 		memcpy(maybe_dst, fname, len + 1);
 		maybe_dst[0] = maybe_dst[1];
 		maybe_dst[1] = ':';
+		if (!maybe_dst[2] && siz > 3) {
+			maybe_dst[2] = '/';
+			maybe_dst[3] = 0;
+		}
 		return maybe_dst;
 	}
 
 	return fname;
 }
 
-// same as bbpath_to_w32 but inplace, and fname is of any size (or NULL)
-char *bbpath_to_w32_inplace(char *fname)
+// same as bbpath_to_w32 but inplace, and fname is NULL or with siz >= 4, to
+// be able to handle extending "/X" (2 chars + \0) into "X:/" (siz 4).
+// all other cases where fname is modified don't extend it (same strlen).
+char *bbpath_to_w32_inplace_4plus(char *fname)
 {
 	if (HAS_W32_FAKE_ROOT(fname)) {
 		fname[0] = fname[1];
 		fname[1] = ':';
+		if (!fname[2]) {
+			fname[2] = '/';
+			fname[3] = 0;
+		}
 	}
 
 	return fname;
@@ -1014,24 +1028,33 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
 }
 
 /*
+ * eventhough invalid template, w32f_inplace_4plus can extend a template
+ * of /X (X is any alpha) into X:/, but we don't know that the template
+ * var has enough space, so we reject such template without calling mktemp,
+ * and set errno accordingly.
+ */
+static int bad_template(const char *template)
+{
+	return W32_FAKE_ROOT_EXTENDS(template) ? errno = EINVAL, 1 : 0;
+}
+
+/*
  * Windows' mktemp returns NULL on error whereas POSIX always returns the
  * template and signals an error by making it an empty string.
  */
 #undef mktemp
 char *mingw_mktemp(char *template)
 {
-	w32f_inplace(template);
-
-	if ( mktemp(template) == NULL ) {
+	if (bad_template(template) || mktemp(w32f_inplace_4plus(template)) == NULL)
 		template[0] = '\0';
-	}
 
 	return template;
 }
 
 int mkstemp(char *template)
 {
-	char *filename = mktemp(w32f_inplace(template));
+	char *filename = bad_template(template) ? NULL
+	               : mktemp(w32f_inplace_4plus(template));
 	if (filename == NULL)
 		return -1;
 	return open(filename, O_RDWR | O_CREAT, 0600);
@@ -1492,7 +1515,7 @@ static REPARSE_DATA_BUFFER *make_junction_data_buffer(char *rpath)
 	 * The return value from MultiByteToWideChar includes the trailing
 	 * L'\0' character.
 	 */
-	w32f_inplace(rpath);
+	w32f_inplace_4plus(rpath);  // PATH_MAX >= 4 at the caller
 	slash_to_bs(rpath);
 	plen = MultiByteToWideChar(CP_ACP, 0, rpath, -1, pbuf, PATH_MAX);
 	if (plen == 0) {
@@ -1605,7 +1628,7 @@ static char *resolve_symlinks(char *path)
 						LPSTR, DWORD, DWORD);
 	char *resolve = NULL;
 
-	w32f_inplace(path);
+	w32f_inplace_4plus(path);  // PATH_MAX >= 4 at the caller
 
 	if (GetFileAttributesA(path) & FILE_ATTRIBUTE_REPARSE_POINT) {
 		resolve = xmalloc_follow_symlinks(path);
