@@ -30,6 +30,8 @@ DIR *opendir(const char *name)
 	int len;
 	DIR *dir;
 
+	name = w32f(name);
+
 	/* check that name is not NULL */
 	if (!name) {
 		errno = EINVAL;

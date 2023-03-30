@@ -183,6 +183,39 @@ char *strsignal(int sig)
 	return (char *)get_signame(sig);
 }
 
+#define HAS_W32_FAKE_ROOT(f) \
+	(f && f[0] == '/' && f[1] && f[2] == '/' && isalpha(f[1]))
+
+// convert unix-style absolute path /<letter>/... to windows <letter>:/...
+// returns fname, or, if fname begins with "/X/" and fits siz (with \0),
+// return maybe_dst with a modified version of fname which begins with "X:/".
+// maybe_dst must be at least siz bytes, and not overlap with fname
+const char *bbpath_to_w32(const char *fname, char *maybe_dst, size_t siz)
+{
+	size_t len;
+
+	if (HAS_W32_FAKE_ROOT(fname) && (len = strlen(fname)) < siz) {
+		memcpy(maybe_dst, fname, len + 1);
+		maybe_dst[0] = maybe_dst[1];
+		maybe_dst[1] = ':';
+		return maybe_dst;
+	}
+
+	return fname;
+}
+
+// same as bbpath_to_w32 but inplace, and fname is of any size (or NULL)
+char *bbpath_to_w32_inplace(char *fname)
+{
+	if (HAS_W32_FAKE_ROOT(fname)) {
+		fname[0] = fname[1];
+		fname[1] = ':';
+	}
+
+	return fname;
+}
+
+
 static int zero_fd = -1;
 static int rand_fd = -1;
 
@@ -229,6 +262,8 @@ int mingw_open (const char *filename, int oflags, ...)
 	int fd;
 	int special = (oflags & O_SPECIAL);
 	int dev = get_dev_type(filename);
+
+	filename = w32f(filename);  // get_dev_type above only looks for /dev/...
 
 	/* /dev/null is always allowed, others only if O_SPECIAL is set */
 	if (dev == DEV_NULL || (special && dev != NOT_DEVICE)) {
@@ -279,6 +314,8 @@ ssize_t FAST_FUNC mingw_open_read_close(const char *fn, void *buf, size_t size)
 FILE *mingw_fopen (const char *filename, const char *otype)
 {
 	int fd;
+
+	filename = w32f(filename);
 
 	if (get_dev_type(filename) == DEV_NULL)
 		filename = "nul";
@@ -358,6 +395,7 @@ static inline mode_t file_attr_to_st_mode(DWORD attr)
 static int get_file_attr(const char *fname, WIN32_FILE_ATTRIBUTE_DATA *fdata)
 {
 	char *want_dir;
+	fname = w32f(fname);
 
 	if (get_dev_type(fname) == DEV_NULL || get_dev_fd(fname) >= 0) {
 		/* Fake attributes for special devices */
@@ -441,6 +479,8 @@ static int has_exec_format(const char *name)
 	int sig;
 	unsigned int offset;
 	unsigned char buf[1024];
+
+	name = w32f(name);
 
 	/* special case: skip DLLs, there are thousands of them! */
 	if (is_suffixed_with_case(name, ".dll"))
@@ -588,6 +628,8 @@ static uid_t file_owner(HANDLE fh, struct mingw_stat *buf)
 static DWORD get_symlink_data(DWORD attr, const char *pathname,
 					WIN32_FIND_DATAA *fbuf)
 {
+	pathname = w32f(pathname);
+
 	if (attr & FILE_ATTRIBUTE_REPARSE_POINT) {
 		HANDLE handle = FindFirstFileA(pathname, fbuf);
 		if (handle != INVALID_HANDLE_VALUE) {
@@ -666,6 +708,8 @@ static int do_lstat(int follow, const char *file_name, struct mingw_stat *buf)
 	DWORD low, high;
 	off64_t size;
 	char *lname = NULL;
+
+	file_name = w32f(file_name);
 
 	while (!(err=get_file_attr(file_name, &fdata))) {
 		buf->st_ino = 0;
@@ -905,6 +949,8 @@ int utimensat(int fd, const char *path, const struct timespec times[2],
 	HANDLE fh;
 	DWORD cflag = FILE_FLAG_BACKUP_SEMANTICS;
 
+	path = w32f(path);
+
 	if (is_relative_path(path) && fd != AT_FDCWD) {
 		errno = ENOSYS;	// partial implementation
 		return rc;
@@ -974,6 +1020,8 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
 #undef mktemp
 char *mingw_mktemp(char *template)
 {
+	w32f_inplace(template);
+
 	if ( mktemp(template) == NULL ) {
 		template[0] = '\0';
 	}
@@ -983,7 +1031,7 @@ char *mingw_mktemp(char *template)
 
 int mkstemp(char *template)
 {
-	char *filename = mktemp(template);
+	char *filename = mktemp(w32f_inplace(template));
 	if (filename == NULL)
 		return -1;
 	return open(filename, O_RDWR | O_CREAT, 0600);
@@ -1071,6 +1119,8 @@ char *mingw_getcwd(char *pointer, int len)
 int mingw_rename(const char *pold, const char *pnew)
 {
 	DWORD attrs;
+	pold = w32f(pold);
+	pnew = w32f(pnew);
 
 	/*
 	 * For non-symlinks, try native rename() first to get errno right.
@@ -1326,6 +1376,10 @@ int link(const char *oldpath, const char *newpath)
 		errno = ENOSYS;
 		return -1;
 	}
+
+	oldpath = w32f(oldpath);
+	newpath = w32f(newpath);
+
 	if (!CreateHardLinkA(newpath, oldpath, NULL)) {
 		errno = err_win_to_posix();
 		return -1;
@@ -1350,6 +1404,9 @@ int symlink(const char *target, const char *linkpath)
 		errno = ENOSYS;
 		return -1;
 	}
+
+	target = w32f(target);
+	linkpath = w32f(linkpath);
 
 	if (is_relative_path(target) && has_path(linkpath)) {
 		/* make target's path relative to current directory */
@@ -1435,6 +1492,7 @@ static REPARSE_DATA_BUFFER *make_junction_data_buffer(char *rpath)
 	 * The return value from MultiByteToWideChar includes the trailing
 	 * L'\0' character.
 	 */
+	w32f_inplace(rpath);
 	slash_to_bs(rpath);
 	plen = MultiByteToWideChar(CP_ACP, 0, rpath, -1, pbuf, PATH_MAX);
 	if (plen == 0) {
@@ -1470,6 +1528,9 @@ int create_junction(const char *oldpath, const char *newpath)
 	HANDLE h;
 	int error = 0;
 	DWORD bytes;
+
+	oldpath = w32f(oldpath);
+	newpath = w32f(newpath);
 
 	if (realpath(oldpath, rpath) == NULL || stat(rpath, &statbuf) < 0)
 		return -1;
@@ -1544,6 +1605,8 @@ static char *resolve_symlinks(char *path)
 						LPSTR, DWORD, DWORD);
 	char *resolve = NULL;
 
+	w32f_inplace(path);
+
 	if (GetFileAttributesA(path) & FILE_ATTRIBUTE_REPARSE_POINT) {
 		resolve = xmalloc_follow_symlinks(path);
 		if (!resolve)
@@ -1595,6 +1658,8 @@ char *realpath(const char *path, char *resolved_path)
 {
 	char buffer[MAX_PATH];
 	char *real_path, *p;
+
+	path = w32f(path);
 
 	/* enforce glibc pre-2.3 behaviour */
 	if (path == NULL || resolved_path == NULL) {
@@ -1660,6 +1725,8 @@ char * FAST_FUNC xmalloc_readlink(const char *pathname)
 	HANDLE h;
 	char *buf;
 	int bufsiz;
+
+	pathname = w32f(pathname);
 
 	h = CreateFile(pathname, 0, 0, NULL, OPEN_EXISTING,
 				FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS, NULL);
@@ -1738,6 +1805,8 @@ int mingw_mkdir(const char *path, int mode UNUSED_PARAM)
 	struct stat st;
 	int lerrno = 0;
 
+	path = w32f(path);
+
 	if ( (ret=mkdir(path)) < 0 ) {
 		lerrno = errno;
 		if ( lerrno == EACCES && stat(path, &st) == 0 ) {
@@ -1754,7 +1823,8 @@ int mingw_mkdir(const char *path, int mode UNUSED_PARAM)
 int mingw_chdir(const char *dirname)
 {
 	int ret = -1;
-	const char *realdir = dirname;
+	const char *realdir = (dirname = w32f(dirname));
+
 
 	if (is_symlink(dirname)) {
 		realdir = auto_string(xmalloc_realpath(dirname));
@@ -1771,6 +1841,8 @@ int mingw_chdir(const char *dirname)
 #undef chmod
 int mingw_chmod(const char *path, int mode)
 {
+	path = w32f(path);
+
 	if (mingw_is_directory(path))
 		mode |= 0222;
 
@@ -1825,6 +1897,8 @@ int fcntl(int fd, int cmd, ...)
 int mingw_unlink(const char *pathname)
 {
 	int ret;
+
+	pathname = w32f(pathname);
 
 	/* read-only files cannot be removed */
 	chmod(pathname, 0666);
@@ -1989,6 +2063,8 @@ int mingw_access(const char *name, int mode)
 	int ret;
 	struct stat s;
 
+	name = w32f(name);
+
 	/* Windows can only handle test for existence, read or write */
 	if (mode == F_OK || (mode & ~X_OK)) {
 		ret = _access(name, mode & ~X_OK);
@@ -2009,6 +2085,8 @@ int mingw_access(const char *name, int mode)
 
 int mingw_rmdir(const char *path)
 {
+	path = w32f(path);
+
 	/* On Linux rmdir(2) doesn't remove symlinks */
 	if (is_symlink(path)) {
 		errno = ENOTDIR;
@@ -2119,7 +2197,7 @@ add_win32_extension(char *p)
 char *
 file_is_win32_exe(const char *name)
 {
-	char *path = alloc_ext_space(name);
+	char *path = alloc_ext_space(w32f(name));
 
 	if (add_win32_extension(path))
 		return path;
@@ -2222,6 +2300,8 @@ int enumerate_links(const char *file, char *name)
 			!INIT_PROC_ADDR(kernel32.dll, FindNextFileNameW))
 		return 0;
 
+	file = w32f(file);
+
 	if (file != NULL) {
 		wchar_t wfile[PATH_MAX];
 		MultiByteToWideChar(CP_ACP, 0, file, -1, wfile, PATH_MAX);
@@ -2265,6 +2345,8 @@ int unc_root_len(const char *dir)
  * UNC '//host/share', or 0 if the path doesn't look like that. */
 int root_len(const char *path)
 {
+	path = w32f(path);
+
 	if (path == NULL)
 		return 0;
 	if (isalpha(*path) && path[1] == ':')
@@ -2290,6 +2372,8 @@ const char *get_system_drive(void)
 /* Return pointer to system drive if path is of form '/file', else NULL */
 const char *need_system_drive(const char *path)
 {
+	path = w32f(path);
+
 	if (root_len(path) == 0 && (path[0] == '/' || path[0] == '\\'))
 		return get_system_drive();
 	return NULL;
@@ -2340,6 +2424,8 @@ void fix_path_case(char *path)
 {
 	char resolved[PATH_MAX];
 	int len;
+
+	// do we need this?: path = w32f(path);
 
 	// Canonicalise path: for physical drives this makes case match
 	// what's stored on disk.  For mapped drives, not so much.
@@ -2429,6 +2515,7 @@ int has_path(const char *file)
  */
 int is_relative_path(const char *path)
 {
+	path = w32f(path);
 	return !is_dir_sep(path[0]) && !has_dos_drive_prefix(path);
 }
 

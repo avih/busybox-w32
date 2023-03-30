@@ -308,6 +308,8 @@ mingw_spawn_interpreter(int mode, const char *prog, char *const *argv,
 	char **new_argv;
 	char *path = NULL;
 
+	prog = w32f(prog);
+
 	if (!parse_interpreter(prog, &interp))
 		return SPAWNVEQ(mode, prog, argv, envp);
 
@@ -356,6 +358,8 @@ mingw_spawnvp(int mode, const char *cmd, char *const *argv)
 {
 	char *path;
 	intptr_t ret;
+
+	cmd = w32f(cmd);
 
 #if ENABLE_FEATURE_PREFER_APPLETS && NUM_APPLETS > 1
 	if ((!has_path(cmd) || unix_path(cmd)) &&

@@ -3248,6 +3248,8 @@ updatepwd(const char *dir)
 	 */
 	enum {ABS_DRIVE, ABS_SHARE, REL_OTHER, REL_ROOT, REL_CWD} target;
 
+	dir = w32f(dir);
+
 	/* skip multiple leading separators unless dir is a UNC path */
 	if (is_dir_sep(*dir) && unc_root_len(dir) == 0) {
 		while (is_dir_sep(dir[1]))
