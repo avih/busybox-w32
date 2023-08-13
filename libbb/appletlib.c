@@ -915,8 +915,11 @@ int busybox_main(int argc UNUSED_PARAM, char **argv)
 		}
 #   endif
 		full_write2_str(ENABLE_GLOBBING ? "glob" : "noglob");
+#   if ENABLE_FEATURE_UTF8_NATIVE
+		full_write2_str("; Unicode (native)");
+#   endif
 #   if ENABLE_FEATURE_UTF8_MANIFEST
-		full_write2_str("; Unicode");
+		full_write2_str("; Unicode (manifest)");
 #   endif
 		full_write2_str(")\n\n");
 #  else
@@ -1330,12 +1333,28 @@ int main(int argc UNUSED_PARAM, char **argv)
 #endif
 #if ENABLE_PLATFORM_MINGW32
 # if ENABLE_FEATURE_UTF8_MANIFEST
-	if (GetACP() != CP_UTF8) {
+	if (!mingw_is_utf8()) {
 		full_write2_str(bb_basename(argv[0]));
 		full_write2_str(": UTF8 manifest not supported\n");
 		return 1;
 	}
 # endif
+
+#if ENABLE_FEATURE_UTF8_NATIVE
+	{
+		// convert argv and environ to UT8
+		int n;
+		wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &n);
+		char **uargv = mu_utf8_vec(wargv, n);
+
+		if (uargv)
+			argv = uargv;  // leaked on exit. FIXME: conflicts with BB_MMU?
+		if (wargv)
+			LocalFree(wargv);
+
+		mu_init_utf8_env();
+	}
+#endif
 
 	/* detect if we're running an interpreted script */
 	if (argv[0][1] == ':' && argv[0][2] == '/') {

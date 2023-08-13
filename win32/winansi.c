@@ -762,8 +762,8 @@ BOOL conToCharBuffA(LPSTR s, DWORD len)
 
 	if (acp == conicp
 #if ENABLE_FEATURE_UTF8_INPUT
-			// if acp is UTF8 then we got UTF8 via readConsoleInput_utf8
-			|| acp == CP_UTF8
+			// if we're utf8 inernally then we got UTF8 via readConsoleInput_utf8
+			|| mingw_is_utf8_acp(acp)
 #endif
 		)
 		return TRUE;
@@ -1368,8 +1368,8 @@ BOOL readConsoleInput_utf8(HANDLE h, INPUT_RECORD *r, DWORD len, DWORD *got)
 	if (len != 1)
 		return FALSE;
 
-	// if ACP is UTF8 then we read UTF8 regardless of console (in) CP
-	if (GetConsoleCP() != CP_UTF8 && GetACP() != CP_UTF8)
+	// if mingw is UTF8 then we read UTF8 regardless of console (in) CP
+	if (GetConsoleCP() != CP_UTF8 && !mingw_is_utf8())
 		return ReadConsoleInput(h, r, len, got);
 
 	if (u8pos == u8len) {

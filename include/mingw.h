@@ -649,3 +649,36 @@ char *get_user_name(void);
 char *quote_arg(const char *arg);
 char *find_first_executable(const char *name);
 char *xappendword(const char *str, const char *word);
+
+
+#if ENABLE_FEATURE_UTF8_NATIVE
+// By convention foo_U is the windows API FooW/_wfoo but with UTF-8 interface,
+// and mu_bar is a utility
+
+// allocate a null-terminated conversion-result for null-terminated input.
+char *mu_utf8(const wchar_t *ws);
+wchar_t *mu_wide(const char *u8);
+
+// single allocation of 0-terminated array of 0-terminated converted strings.
+// if maxn < 0: up to NULL input string, else up to NULL input string or maxn.
+char **mu_utf8_vec(wchar_t *const *wvec, int maxn);
+wchar_t **mu_wide_vec(char *const *uvec, int maxn);
+
+void mu_init_utf8_env(void);
+
+
+// ---- win32 utf8 API ----
+
+#undef spawnve
+#define spawnve spawnve_U
+intptr_t spawnve_U(int mode, const char *cmd, char *const *argv, char *const *env);
+
+#endif
+
+#if ENABLE_FEATURE_UTF8_NATIVE
+	#define mingw_is_utf8() 1
+	#define mingw_is_utf8_acp(acp) 1
+#else
+	#define mingw_is_utf8() (GetACP() == CP_UTF8)
+	#define mingw_is_utf8_acp(acp) ((acp) == CP_UTF8)
+#endif

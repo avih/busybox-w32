@@ -2574,3 +2574,170 @@ char *xappendword(const char *str, const char *word)
 	free((void *)str);
 	return newstr;
 }
+
+
+#if ENABLE_FEATURE_UTF8_NATIVE
+
+// ------------------- UTF8 conversion utils -------------------
+
+// All functions which use mu_utf8_count/mu_wide_count to first check the
+// expected size assume the conversion will work with same or bigger space.
+
+// positive (not 0) on success. result is in destination units and includes the
+// terminating null if it's within the input count range. nws/nu8 can be -1 to
+// indicate that the input is null-terminated (and the result includes it).
+#define mu_utf8_count(ws_src, nws) \
+	WideCharToMultiByte(CP_UTF8, 0, (ws_src), (nws), 0, 0, 0, 0)
+#define mu_wide_count(u8_src, nu8) \
+	MultiByteToWideChar(CP_UTF8, 0, (u8_src), (nu8), 0, 0)
+
+// performs a conversion, trimmed (without null) if dest size is insufficient
+// TODO: if input size is given, does it convert beyond input \0 if size allows?
+#define mu_utf8_raw(ws_src, nws, u8_dst, nu8) \
+	WideCharToMultiByte(CP_UTF8, 0, (ws_src), (nws), (u8_dst), (nu8), 0, 0)
+#define mu_wide_raw(u8_src, nu8, ws_dst, nws) \
+	MultiByteToWideChar(CP_UTF8, 0, (u8_src), (nu8), (ws_dst), (nws))
+
+
+// dies on OOM, returns NULL on other errors.
+char *mu_utf8(const wchar_t *ws)
+{
+	char *u8 = 0;
+	int n = ws ? mu_utf8_count(ws, -1) : 0;
+	if (n > 0) {
+		u8 = xmalloc(sizeof(char) * n);
+		mu_utf8_raw(ws, -1, u8, n);
+	}
+	return u8;
+}
+
+// dies on OOM, returns NULL on other errors.
+wchar_t *mu_wide(const char *u8)
+{
+	wchar_t *ws = 0;
+	int n = u8 ? mu_wide_count(u8, -1) : 0;
+	if (n > 0) {
+		ws = xmalloc(sizeof(wchar_t) * n);
+		mu_wide_raw(u8, -1, ws, n);
+	}
+	return ws;
+}
+
+// continuous allocation for the pointers (incl. final NULL) and the strings.
+// if maxn >= 0 then up to maxn elements or NULL - whichever comes first.
+// final NULL is always added at the result array except if input is NULL.
+// dies on OOM, returns NULL if input is NULL or if some conversion failed.
+char **mu_utf8_vec(wchar_t *const *wvec, int maxn)
+{
+	size_t usize, n, i;
+	char **uvec, *uval;
+
+	if (!wvec)
+		return 0;
+
+	for (usize = 0, n = 0; (maxn < 0 || n < maxn) && wvec[n]; n++) {
+		int count = mu_utf8_count(wvec[n], -1);
+		if (count <= 0)
+			return 0;
+		usize += count;
+	}
+
+	uvec = xmalloc((n+1) * sizeof(char *) + usize * sizeof(char));
+	for (i = 0, uval = (void *)(uvec + n + 1); i < n; i++) {
+		uvec[i] = uval;
+		uval += mu_utf8_raw(wvec[i], -1, uval, usize);
+	}
+	uvec[i] = 0;
+
+	return uvec;
+}
+
+wchar_t **mu_wide_vec(char *const *uvec, int maxn)
+{
+	size_t wsize, n, i;
+	wchar_t **wvec, *wval;
+
+	if (!uvec)
+		return 0;
+
+	for (wsize = 0, n = 0; (maxn < 0 || n < maxn) && uvec[n]; n++) {
+		int count = mu_wide_count(uvec[n], -1);
+		if (count <= 0)
+			return 0;
+		wsize += count;
+	}
+
+	wvec = xmalloc((n+1) * sizeof(wchar_t *) + wsize * sizeof(wchar_t));
+	for (i = 0, wval = (void *)(wvec + n + 1); i < n; i++) {
+		wvec[i] = wval;
+		wval += mu_wide_raw(uvec[i], -1, wval, wsize);
+	}
+	wvec[i] = 0;
+
+	return wvec;
+}
+
+// this is a bit hacky, and we only deal with unicode values (not names).
+// for every env var with non-ascii value at the unicode env, we set
+// this var at the ANSI environ to a utf8 version of this value.
+// This works because the CRT takes the value as is, seemingly even in DBCS.
+// It does, however, also sets the corresponding _wenviron "accordingly",
+// but it assumes it's encoded as ACP, and so the unicode env value
+// becomes broken - but the ANSI env still holds the correct utf8 value.
+// the only place this becomes an issue is when spawning a process with
+// NULL (w)env arg, which means it should take _(w)environ - which is broken.
+// so in this case, we create a wide version of the ansi environ and use that.
+void mu_init_utf8_env(void)
+{
+	wchar_t *envw0 = GetEnvironmentStringsW(), *envw = envw0, *p;
+	char *eu;
+
+	for (; envw && *envw; envw += wcslen(envw) + 1) {
+		for (p = envw; *p && *p < 0x80 && *p != '='; ++p)
+			/* empty */;
+		if (*p != '=')
+			continue;  // non-ascii7 name - don't touch it
+		for (++p; *p && *p < 0x80; ++p)
+			/* empty */
+		if (!*p)
+			continue;  // value is ascii7
+		if (!(eu = mu_utf8(envw)))
+			continue;  // nothing to do on error, just skip
+
+		_putenv(eu);
+		free(eu);  // windows putenv makes a copy of the string
+	}
+
+	FreeEnvironmentStringsW(envw0);
+}
+
+
+// ------------------- UTF8 WIN32 APIs -------------------
+
+intptr_t spawnve_U(int mode, const char *cmd, char *const *argv, char *const *env)
+{
+	intptr_t ret = -1;
+	wchar_t *wcmd = mu_wide(cmd),
+	        **wargv = mu_wide_vec(argv, -1),
+	        **wenv = mu_wide_vec(env ? env : environ, -1);
+
+	// FIXME: curently the native utf8 system doesn't yet support updating
+	// the unicode env from the utf8 (which is at the ANSI environ), and so
+	// if env is NULL then we convert environ to wide and use that instead.
+	// That's supposed to be equivalent, but with UCRT apparently we must
+	// use NULL, so that might be broken currently with UCRT.
+	if ((cmd && !wcmd) || (argv && !wargv) || (environ && !wenv)) {
+		errno = EINVAL;
+	} else {
+		ret = _wspawnve(mode, wcmd, (const wchar_t *const *)wargv,
+		                            (const wchar_t *const *)wenv);
+	}
+
+	free(wenv);
+	free(wargv);
+	free(wcmd);
+
+	return ret;
+}
+
+#endif  // ENABLE_FEATURE_UTF8_NATIVE
