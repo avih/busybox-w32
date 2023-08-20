@@ -1341,19 +1341,7 @@ int main(int argc UNUSED_PARAM, char **argv)
 # endif
 
 #if ENABLE_FEATURE_UTF8_NATIVE
-	{
-		// convert argv and environ to UT8
-		int n;
-		wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &n);
-		char **uargv = mu_utf8_vec(wargv, n);
-
-		if (uargv)
-			argv = uargv;  // leaked on exit. FIXME: conflicts with BB_MMU?
-		if (wargv)
-			LocalFree(wargv);
-
-		mu_init_utf8_env();
-	}
+	mu_init_utf8_entry(&argv);  // also inits utf8 env
 #endif
 
 	/* detect if we're running an interpreted script */
