@@ -680,7 +680,7 @@ void mu_export_utf8_env(void);
 // Instead, in such cases, we declare the prototype and mapping right
 // after the #existing undef of the ansi name (at the C file of the wrapper).
 
-intptr_t spawnve(int mode, const char *cmd, char *const *argv, char *const *env);
+intptr_t spawnve_U(int mode, const char *cmd, char *const *argv, char *const *env);
 #undef spawnve
 #define spawnve spawnve_U
 

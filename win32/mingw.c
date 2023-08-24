@@ -2686,10 +2686,9 @@ wchar_t **mu_wide_vec(char *const *uvec, int maxn)
 // convert u8s into wbuf if it fits + \0 in wcount, else allocate the result
 static wchar_t *mu_wide_buf(const char *u8s, wchar_t *wbuf, size_t wcount)
 {
-	return !u8s ? 0
-	     : mu_wide_count(u8s, -1) > wcount ? mu_wide(u8s)
-	     : mu_wide_raw(u8s, -1, wbuf, wcount) > 0 ? wbuf
-	     : (errno = EILSEQ, 0);
+	return mu_wide_raw(u8s, -1, wbuf, wcount) > 0 ? wbuf
+	     : GetLastError() == ERROR_INSUFFICIENT_BUFFER ? mu_wide(u8s)
+	     : (errno = EILSEQ, (wchar_t*)0);
 }
 
 // boilerplate wrapper to define + init a wchar_t* pointer from a utf8 string.
@@ -2737,16 +2736,18 @@ static void mu_init_utf8_env(void)
 {
 	wchar_t *envw0 = GetEnvironmentStringsW(), *envw = envw0, *p;
 
-	for (; envw && *envw; envw += wcslen(envw) + 1) {
-		char *eu;
-		int eq = 0;
+	for (char *eu; envw && *(p = envw); envw += wcslen(envw) + 1) {
+		while (*p && *p != '=' && *p < 0x80)
+			++p;
+		if (*p++ != '=')
+			continue;  // non-ascii7 name, or no '='
 
-		for (p = envw; *p && *p < 0x80; ++p) {
-			if (*p == '=')
-				eq = 1;  // ascii7 name
-		}
+		while (*p && *p < 0x80)
+			++p;
+		if (!*p)
+			continue;
 
-		if (eq && *p && (eu = mu_utf8(envw))) {
+		if ((eu = mu_utf8(envw))) {
 			// ascii7 name, unicode value, and converted
 			_putenv(eu);
 			free(eu);  // windows putenv makes a copy
@@ -2760,15 +2761,18 @@ static void mu_init_utf8_env(void)
 // system wvar with the unicode value (the crt _[w]environ are unmodified)
 void mu_export_utf8_env(void)
 {
-	for (char *p, **env = environ; env && *env; ++env) {
-		int eq = 0;
-		for (p = *env; *p && (unsigned char)*p < 0x80; ++p) {
-			if (*p == '=')
-				eq = 1;  // ascii7 name
-		}
-		if (!eq || !*p)
-			continue;  // unicode name, or ascii7 name+val
+	for (char *p, **env = environ; env && (p = *env); ++env) {
+		while (*p && *p != '=' && (unsigned char)*p < 0x80)
+			++p;
+		if (*p++ != '=')
+			continue;
 
+		while (*p && (unsigned char)*p < 0x80)
+			++p;
+		if (!*p)
+			continue;
+
+		// ascii7 name, unicode value
 		IF_WITH_WSTR(wenv, *env) {
 			wchar_t *weq = wcschr(wenv, '=');
 			if (weq) {
