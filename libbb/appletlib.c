@@ -1344,8 +1344,12 @@ int main(int argc UNUSED_PARAM, char **argv)
 	// note: changing argv may conflict with !BB_MMU, because it changes
 	// argv[0][0] and messes with the 0x80 bit before we replace argv.
 	// however, at the time of writing, BB_MMU is non-0, so no issue.
-	argv = mu_get_utf8_argv(argv);  // leaked on exit
-	mu_init_utf8_env();
+	{
+		char **u8argv = mu_get_utf8_prog_argv();
+		if (u8argv)
+			argv = u8argv; // leaked on exit
+		mu_init_utf8_env();
+	}
 #endif
 
 	/* detect if we're running an interpreted script */

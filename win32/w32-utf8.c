@@ -140,8 +140,8 @@ static wchar_t *mu_wide_buf(const char *u8s, wchar_t *wbuf, size_t wcount)
 #define IF_WITH_WPATH(wvar, u8) IF_WITH_WSTR(wvar, u8)
 
 
-// ensure argv and environ are UT8
-char **mu_get_utf8_argv(char **argv)
+// returns the original argv if can't get the utf8 arguments
+char **mu_get_utf8_prog_argv(void)
 {
 	int n;
 	wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &n);
@@ -150,7 +150,7 @@ char **mu_get_utf8_argv(char **argv)
 	if (wargv)
 		LocalFree(wargv);
 
-	return u8argv ? u8argv : argv;
+	return u8argv;
 }
 
 // [ wide proc env - accessed via {Get,Set}EnvironmentVariableW et al ]
@@ -175,8 +175,10 @@ char **mu_get_utf8_argv(char **argv)
 void mu_init_utf8_env(void)
 {
 	wchar_t *envw0 = GetEnvironmentStringsW(), *envw = envw0, *p;
+	if (!envw0)
+		return;
 
-	for (char *eu; envw && *(p = envw); envw += wcslen(envw) + 1) {
+	for (char *eu; *(p = envw); envw += wcslen(envw) + 1) {
 		while (*p && *p != '=' && *p < 0x80)
 			++p;
 		if (*p++ != '=')
@@ -201,7 +203,10 @@ void mu_init_utf8_env(void)
 // system wvar with the unicode value (the crt _[w]environ are unmodified)
 void mu_export_utf8_env(void)
 {
-	for (char *p, **env = environ; env && (p = *env); ++env) {
+	if (!environ)
+		return;
+
+	for (char *p, **env = environ; (p = *env); ++env) {
 		while (*p && *p != '=' && (unsigned char)*p < 0x80)
 			++p;
 		if (*p++ != '=')
