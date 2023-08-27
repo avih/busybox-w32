@@ -1333,7 +1333,7 @@ int main(int argc UNUSED_PARAM, char **argv)
 #endif
 #if ENABLE_PLATFORM_MINGW32
 # if ENABLE_FEATURE_UTF8_MANIFEST
-	if (!mingw_is_utf8()) {
+	if (GetACP() != CP_UTF8) {
 		full_write2_str(bb_basename(argv[0]));
 		full_write2_str(": UTF8 manifest not supported\n");
 		return 1;
@@ -1341,7 +1341,11 @@ int main(int argc UNUSED_PARAM, char **argv)
 # endif
 
 #if ENABLE_FEATURE_UTF8_NATIVE
-	mu_init_utf8_entry(&argv);  // also inits utf8 env
+	// note: changing argv may conflict with !BB_MMU, because it changes
+	// argv[0][0] and messes with the 0x80 bit before we replace argv.
+	// however, at the time of writing, BB_MMU is non-0, so no issue.
+	argv = mu_get_utf8_argv(argv);  // leaked on exit
+	mu_init_utf8_env();
 #endif
 
 	/* detect if we're running an interpreted script */

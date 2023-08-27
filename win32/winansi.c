@@ -741,7 +741,7 @@ static BOOL charToConBuffA(LPSTR s, DWORD len)
 
 	terminal_mode(FALSE);
 	buf = xmalloc(len*sizeof(WCHAR));
-	MultiByteToWideChar(CP_ACP, 0, s, len, buf, len);
+	MultiByteToWideChar(BB_ACP, 0, s, len, buf, len);
 	WideCharToMultiByte(conocp, 0, buf, len, s, len, NULL, NULL);
 	free(buf);
 	return TRUE;
@@ -756,14 +756,14 @@ static BOOL charToConA(LPSTR s)
 
 BOOL conToCharBuffA(LPSTR s, DWORD len)
 {
-	UINT acp = GetACP(), conicp = GetConsoleCP();
+	UINT acp = GET_BB_ACP(), conicp = GetConsoleCP();
 	CPINFO acp_info, con_info;
 	WCHAR *buf;
 
 	if (acp == conicp
 #if ENABLE_FEATURE_UTF8_INPUT
-			// if we're utf8 inernally then we got UTF8 via readConsoleInput_utf8
-			|| mingw_is_utf8_acp(acp)
+			// if acp is UTF8 then we got UTF8 via readConsoleInput_utf8
+			|| acp == CP_UTF8
 #endif
 		)
 		return TRUE;
@@ -776,7 +776,7 @@ BOOL conToCharBuffA(LPSTR s, DWORD len)
 	terminal_mode(FALSE);
 	buf = xmalloc(len*sizeof(WCHAR));
 	MultiByteToWideChar(conicp, 0, s, len, buf, len);
-	WideCharToMultiByte(CP_ACP, 0, buf, len, s, len, NULL, NULL);
+	WideCharToMultiByte(BB_ACP, 0, buf, len, s, len, NULL, NULL);
 	free(buf);
 	return TRUE;
 }
@@ -1368,8 +1368,8 @@ BOOL readConsoleInput_utf8(HANDLE h, INPUT_RECORD *r, DWORD len, DWORD *got)
 	if (len != 1)
 		return FALSE;
 
-	// if mingw is UTF8 then we read UTF8 regardless of console (in) CP
-	if (GetConsoleCP() != CP_UTF8 && !mingw_is_utf8())
+	// if ACP is UTF8 then we read UTF8 regardless of console (in) CP
+	if (GetConsoleCP() != CP_UTF8 && GET_BB_ACP() != CP_UTF8)
 		return ReadConsoleInput(h, r, len, got);
 
 	if (u8pos == u8len) {

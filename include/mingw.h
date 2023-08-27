@@ -652,45 +652,11 @@ char *xappendword(const char *str, const char *word);
 
 
 #if ENABLE_FEATURE_UTF8_NATIVE
-// By convention foo_U is the windows API FooW/_wfoo but with UTF-8 interface,
-// and mu_bar is a utility
+	#include "w32-utf8.h"
 
-// allocate a null-terminated conversion-result for null-terminated input.
-char *mu_utf8(const wchar_t *ws);
-wchar_t *mu_wide(const char *u8);
-
-// single allocation of 0-terminated array of 0-terminated converted strings.
-// if maxn < 0: up to NULL input string, else up to NULL input string or maxn.
-char **mu_utf8_vec(wchar_t *const *wvec, int maxn);
-wchar_t **mu_wide_vec(char *const *uvec, int maxn);
-
-void mu_init_utf8_entry(char ***argvp);
-void mu_export_utf8_env(void);
-
-// ---- win32 utf8 API ----
-
-// the utf8 _U APIs are easily exposed, but mapping the ansi API is tricky.
-// for ansi APIs which are not wrapped in mingw/winansi/etc, we simply
-// map them globally as #define FuncA func_U, or #define [_]func func_U.
-// But some ansi APIs are already mapped into mingw/winansi/etc, like fopen,
-// and in those cases the name is typically #undef[ined] right before the
-// mingw/winansi wrapper implementation (so that it can call the underlaying
-// API with that name - which we want to map to the _U API), so we shouldn't
-// override the name globally.
-// Instead, in such cases, we declare the prototype and mapping right
-// after the #existing undef of the ansi name (at the C file of the wrapper).
-
-intptr_t spawnve_U(int mode, const char *cmd, char *const *argv, char *const *env);
-#undef spawnve
-#define spawnve spawnve_U
-
-#endif
-
-
-#if ENABLE_FEATURE_UTF8_NATIVE
-	#define mingw_is_utf8() 1
-	#define mingw_is_utf8_acp(acp) 1
+	#define GET_BB_ACP() CP_UTF8
+	#define BB_ACP       CP_UTF8
 #else
-	#define mingw_is_utf8() (GetACP() == CP_UTF8)
-	#define mingw_is_utf8_acp(acp) ((acp) == CP_UTF8)
+	#define GET_BB_ACP() GetACP()
+	#define BB_ACP       CP_ACP
 #endif

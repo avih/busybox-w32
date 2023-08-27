@@ -1,3 +1,7 @@
+char **mu_get_utf8_argv(char **argv);
+void mu_init_utf8_env(void);
+void mu_export_utf8_env(void);
+
 // the utf8 _U APIs are easily exposed, but mapping the ansi API is tricky.
 // for ansi APIs which are not wrapped in mingw/winansi/etc, we simply
 // map them globally as #define FuncA func_U, or #define [_]func func_U.

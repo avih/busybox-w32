@@ -276,7 +276,7 @@ static void run_agent(const char *agent, FILE_NOTIFY_INFORMATION *info,
 	const char *args[5];
 
 	memset(filename, 0, sizeof(filename));
-	len = WideCharToMultiByte(CP_ACP, 0, info->FileName,
+	len = WideCharToMultiByte(BB_ACP, 0, info->FileName,
 				info->FileNameLength/2, filename, sizeof(filename),
 				NULL, NULL);
 
