@@ -32,3 +32,4 @@ lib-$(CONFIG_PLATFORM_MINGW32) += termios.o
 lib-$(CONFIG_PLATFORM_MINGW32) += timegm.o
 lib-$(CONFIG_PLATFORM_MINGW32) += uname.o
 lib-$(CONFIG_PLATFORM_MINGW32) += winansi.o
+lib-$(CONFIG_FEATURE_UTF8_NATIVE) += w32-utf8.o
