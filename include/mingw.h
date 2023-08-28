@@ -655,8 +655,6 @@ char *xappendword(const char *str, const char *word);
 	#include "w32-utf8.h"
 
 	#define GET_BB_ACP() CP_UTF8
-	#define BB_ACP       CP_UTF8
 #else
 	#define GET_BB_ACP() GetACP()
-	#define BB_ACP       CP_ACP
 #endif

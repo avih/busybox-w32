@@ -1517,7 +1517,7 @@ static REPARSE_DATA_BUFFER *make_junction_data_buffer(char *rpath)
 	 */
 	w32f_inplace_4plus(rpath);  // PATH_MAX >= 4 at the caller
 	slash_to_bs(rpath);
-	plen = MultiByteToWideChar(BB_ACP, 0, rpath, -1, pbuf, PATH_MAX);
+	plen = MultiByteToWideChar(CP_ACP, 0, rpath, -1, pbuf, PATH_MAX);
 	if (plen == 0) {
 		errno = err_win_to_posix();
 		return NULL;
@@ -1793,10 +1793,10 @@ char * FAST_FUNC xmalloc_readlink(const char *pathname)
 		if (name) {
 			name[len] = 0;
 			name = normalize_ntpath(name);
-			bufsiz = WideCharToMultiByte(BB_ACP, 0, name, -1, NULL, 0, 0, 0);
+			bufsiz = WideCharToMultiByte(CP_ACP, 0, name, -1, NULL, 0, 0, 0);
 			if (bufsiz) {
 				buf = xmalloc(bufsiz);
-				if (WideCharToMultiByte(BB_ACP, 0, name, -1, buf, bufsiz, 0, 0))
+				if (WideCharToMultiByte(CP_ACP, 0, name, -1, buf, bufsiz, 0, 0))
 					return buf;
 				free(buf);
 			}
@@ -2327,7 +2327,7 @@ int enumerate_links(const char *file, char *name)
 
 	if (file != NULL) {
 		wchar_t wfile[PATH_MAX];
-		MultiByteToWideChar(BB_ACP, 0, file, -1, wfile, PATH_MAX);
+		MultiByteToWideChar(CP_ACP, 0, file, -1, wfile, PATH_MAX);
 		h = FindFirstFileNameW(wfile, 0, &length, wname);
 		if (h == INVALID_HANDLE_VALUE)
 			return 0;
@@ -2337,7 +2337,7 @@ int enumerate_links(const char *file, char *name)
 		h = INVALID_HANDLE_VALUE;
 		return 0;
 	}
-	WideCharToMultiByte(BB_ACP, 0, wname, -1, aname, PATH_MAX, NULL, NULL);
+	WideCharToMultiByte(CP_ACP, 0, wname, -1, aname, PATH_MAX, NULL, NULL);
 	realpath(aname, name);
 	return 1;
 }
