@@ -911,7 +911,7 @@ name_to_codepage(const char *name)
 	const char *alias;
 
 	if (*name == '\0' || strcmp(name, "char") == 0)
-		return GetACP();
+		return GET_BB_ACP();
 	else if (strcmp(name, "wchar_t") == 0)
 		return 1200;
 	else if (_strnicmp(name, "cp", 2) == 0)

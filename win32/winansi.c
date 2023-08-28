@@ -741,7 +741,7 @@ static BOOL charToConBuffA(LPSTR s, DWORD len)
 
 	terminal_mode(FALSE);
 	buf = xmalloc(len*sizeof(WCHAR));
-	MultiByteToWideChar(CP_ACP, 0, s, len, buf, len);
+	MultiByteToWideChar(BB_ACP, 0, s, len, buf, len);
 	WideCharToMultiByte(conocp, 0, buf, len, s, len, NULL, NULL);
 	free(buf);
 	return TRUE;
@@ -776,7 +776,7 @@ BOOL conToCharBuffA(LPSTR s, DWORD len)
 	terminal_mode(FALSE);
 	buf = xmalloc(len*sizeof(WCHAR));
 	MultiByteToWideChar(conicp, 0, s, len, buf, len);
-	WideCharToMultiByte(CP_ACP, 0, buf, len, s, len, NULL, NULL);
+	WideCharToMultiByte(BB_ACP, 0, buf, len, s, len, NULL, NULL);
 	free(buf);
 	return TRUE;
 }
