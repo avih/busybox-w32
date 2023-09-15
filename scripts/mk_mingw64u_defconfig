@@ -2,10 +2,14 @@
 
 configs=$(dirname -- "$0")/../configs
 
-# replace each FOO=bar argument with -e 's/.*FOO.*/FOO=bar/', then sed "$@"
-set_build_opts() {
+# update config values in stdin to stdout.
+# FOO=bar arg sets config FOO to bar, -BAZ arg unsets config BAZ
+update_build_opts() {
     for v; do
-        set -- "$@" -e "s/.*${v%%=*}.*/$v/"
+        case $v in
+	   -*) set -- "$@" -e "s/.*${v#?}.*/# ${v#-} is not set/";;
+	    *) set -- "$@" -e "s/.*${v%%=*}.*/$v/";;
+        esac
         shift
     done
     sed "$@"
@@ -22,7 +26,9 @@ set_build_opts() {
 #   - Screen-width awareness (COMBINING_WCHARS, WIDE_WCHARS)
 #   - Full unicode range (U+10FFFF - LAST_SUPPORTED_WCHAR=1114111)
 
-set_build_opts \
+update_build_opts \
+   -CONFIG_FEATURE_TOOLCHAIN_MANIFEST \
+   -CONFIG_FEATURE_APP_MANIFEST \
     CONFIG_FEATURE_UTF8_MANIFEST=y \
     CONFIG_FEATURE_UTF8_INPUT=y \
     CONFIG_FEATURE_UTF8_OUTPUT=y \
@@ -34,5 +40,3 @@ set_build_opts \
     CONFIG_UNICODE_WIDE_WCHARS=y \
     < "$configs"/mingw64_defconfig \
     > "$configs"/mingw64u_defconfig
-
-sed -i 's/CONFIG_FEATURE_APP_MANIFEST=y/# CONFIG_FEATURE_APP_MANIFEST is not set/' "$configs"/mingw64u_defconfig
