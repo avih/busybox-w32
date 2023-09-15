@@ -1,3 +1,4 @@
+#include <io.h>
 #include <stdio.h>
 #include <windows.h>
 
@@ -247,6 +248,16 @@ intptr_t spawnve_U(int mode, const char *cmd, char *const *argv, char *const *en
 	free(wenv);
 	free(wargv);
 	free(wcmd);
+
+	return ret;
+}
+
+int access_U(const char *path, int mode)
+{
+	int ret = -1;
+
+	IF_WITH_WPATH(wpath, path)
+		ret = _waccess(wpath, mode);
 
 	return ret;
 }

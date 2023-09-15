@@ -23,3 +23,6 @@ void mu_export_utf8_env(void);
 
 intptr_t spawnve_U(int mode, const char *cmd, char *const *argv, char *const *env);
 #define spawnve spawnve_U
+
+int access_U(const char *path, int mode);
+#define _access access_U
