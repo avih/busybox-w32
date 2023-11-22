@@ -1,5 +1,7 @@
 #!/bin/sh
 
+: ${UTF8_MODE=MANIFEST}  # MANIFEST or NATIVE
+
 # replace each FOO=bar argument with -e 's/.*FOO.*/FOO=bar/', then sed "$@"
 set_build_opts() {
     for v; do
@@ -11,7 +13,7 @@ set_build_opts() {
 
 set_unicode_opts() {  # keep in sync with scripts/mk_mingw64u_defconfig
     set_build_opts \
-        CONFIG_FEATURE_UTF8_NATIVE=y \
+        CONFIG_FEATURE_UTF8_${UTF8_MODE}=y \
         CONFIG_FEATURE_UTF8_INPUT=y \
         CONFIG_FEATURE_UTF8_OUTPUT=y \
         CONFIG_UNICODE_SUPPORT=y \
