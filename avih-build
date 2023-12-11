@@ -5,14 +5,19 @@
 # replace each FOO=bar argument with -e 's/.*FOO.*/FOO=bar/', then sed "$@"
 set_build_opts() {
     for v; do
-        set -- "$@" -e "s/.*${v%%=*}.*/$v/"
+        case $v in
+        -*) set -- "$@" -e "s/.*${v#-}.*/# ${v#-} is not set/";;
+         *) set -- "$@" -e "s/.*${v%%=*}.*/$v/";;
+        esac
         shift
     done
     sed "$@"
 }
 
 set_unicode_opts() {  # keep in sync with scripts/mk_mingw64u_defconfig
-    set_build_opts \
+    [ "${UTF8_MODE}" = NATIVE ] || set -- "$@" -CONFIG_FEATURE_APP_MANIFEST
+    set_build_opts "$@" \
+        -CONFIG_FEATURE_TOOLCHAIN_MANIFEST \
         CONFIG_FEATURE_UTF8_${UTF8_MODE}=y \
         CONFIG_FEATURE_UTF8_INPUT=y \
         CONFIG_FEATURE_UTF8_OUTPUT=y \
