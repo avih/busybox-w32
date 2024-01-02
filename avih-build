@@ -1,6 +1,6 @@
 #!/bin/sh
 
-: ${UTF8_MODE=MANIFEST}  # MANIFEST or NATIVE
+: ${UTF8_MODE=MANIFEST}  # MANIFEST or NATIVE when using -u
 
 # replace each FOO=bar argument with -e 's/.*FOO.*/FOO=bar/', then sed "$@"
 set_build_opts() {
@@ -35,9 +35,13 @@ cd -- "$(dirname "$0")"
 
 N=$(nproc)
 
+strstr() { ! case $1 in *"$2"*) false; esac; }
+
 sed s/x86_64-w64-mingw32-// < configs/mingw64_defconfig \
 | ([ "${1-}" = -u ] && set_unicode_opts || cat) \
+| (strstr "$*" clang && set_build_opts -CONFIG_STATIC_LIBGCC || cat) \
 > configs/avih_defconfig
 
-time make avih_defconfig -j$N
-time make -j$((1 + N*2/3))  # don't consume all cores...
+[ "${1-}" != -u ] || shift
+time make avih_defconfig -j$N "$@"
+time make -j$((1 + N*2/3)) "$@"  # don't consume all cores...
