@@ -4,6 +4,7 @@ cd -- "$(dirname -- "$0")"
 
 toolchain64=d:/run/w64devkit/latest-x86_64/bin
 toolchain32=d:/run/w64devkit/latest-i686/bin
+toolchainucrt=d:/run/llvm-mingw/ucrt/bin
 
 # getopt-like, we only support [-k] [--]
 [ "${1-}" = -k ] && keep=x && shift || keep=  # the tmp work dir
@@ -30,7 +31,7 @@ build_one() (
     ./avih-build "$@"
 
     mkdir "$target"
-    cp -a -- ./busybox.exe "$target"
+    cp -a -- ./.config ./busybox.exe "$target"
 )
 
 
@@ -47,6 +48,7 @@ build_one "$toolchain64" x86_64
 build_one "$toolchain64" x86_64-unicode -u
 build_one "$toolchain32" i686
 build_one "$toolchain32" i686-unicode -u
+build_one "$toolchainucrt" x86_64-unicode-ucrt-clang -u CC=clang
 
 
 # create the archive
