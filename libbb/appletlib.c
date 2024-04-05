@@ -143,6 +143,10 @@ static const char packed_usage[] ALIGN1 = { PACKED_USAGE };
 
 void FAST_FUNC bb_show_usage(void)
 {
+	ssize_t FAST_FUNC (*full_write_fn)(const char *) =
+		xfunc_error_retval ? full_write2_str : full_write1_str;
+#define full_write2_str full_write_fn
+
 	if (ENABLE_SHOW_USAGE) {
 #ifdef SINGLE_APPLET_STR
 		/* Imagine that this applet is "true". Dont link in printf! */
@@ -193,6 +197,7 @@ void FAST_FUNC bb_show_usage(void)
 #endif
 	}
 	xfunc_die();
+#undef full_write2_str
 }
 
 #if ENABLE_PLATFORM_MINGW32 && NUM_APPLETS > 1 && \
