@@ -2,12 +2,15 @@
 
 : ${UTF8_MODE=MANIFEST}  # MANIFEST or NATIVE when using -u
 
-# replace each FOO=bar argument with -e 's/.*FOO.*/FOO=bar/', then sed "$@"
+# config stdin -> out: set every FOO=bar argument, unset every -BAZ argumemt.
+# FOO/BAZ should already be at the config (set or unset, independently)
 set_build_opts() {
     for v; do
         case $v in
-        -*) set -- "$@" -e "s/.*${v#-}.*/# ${v#-} is not set/";;
-         *) set -- "$@" -e "s/.*${v%%=*}.*/$v/";;
+        -*) set -- "$@" -e "s/.* ${v#-} .*/# ${v#-} is not set/" \
+	                -e   "s/^${v#-}=.*/# ${v#-} is not set/";;
+         *) set -- "$@" -e "s/.* ${v%%=*} .*/$v/" \
+	                -e   "s/^${v%%=*}=.*/$v/";;
         esac
         shift
     done
@@ -40,6 +43,8 @@ strstr() { ! case $1 in *"$2"*) false; esac; }
 sed s/x86_64-w64-mingw32-// < configs/mingw64_defconfig \
 | ([ "${1-}" = -u ] && set_unicode_opts || cat) \
 | (strstr "$*" clang && set_build_opts -CONFIG_STATIC_LIBGCC || cat) \
+| set_build_opts CONFIG_FEATURE_EDITING_HISTORY=2048 \
+                 CONFIG_FEATURE_EDITING_HISTORY_DEFAULT=2048 \
 > configs/avih_defconfig
 
 [ "${1-}" != -u ] || shift
