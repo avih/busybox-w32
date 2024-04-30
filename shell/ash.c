@@ -11456,6 +11456,7 @@ ash_command_name(int i)
 static const char * FAST_FUNC
 ash_var_env(int i)
 {
+#if 0  /* normal implementation - O(N) per call */
 	int n;
 	struct var *vp;
 
@@ -11467,6 +11468,43 @@ ash_var_env(int i)
 	}
 
 	return 0;
+
+#else  /* hacky implementation - O(1) per call */
+	// instead of finding the i-th value from scratch in each call in O(N),
+	// we assume it increases by 1 in each call, starting with 0, in O(1);
+	// this makes iterating over all i values O(N) instead of O(N^2).
+	// issues:
+	// - wrong assumption -> wrong result, e.g. two calls with i==2.
+	// - if vars change between calls, we can crash, because we keep
+	//   reference to a linked-list node (vp) - can be freed/removed.
+	// however, none of those happen, as we're only called from
+	// complete_varname, with i++ on each call, and without changing
+	// shell vars between calls (i == 0 is from scratch - no issue).
+	//
+	// slighly less hacky would be to collect all the data when i==0,
+	// possibly in an array, and return arr[i] in O(1) in later calls.
+	//
+	// not hacky O(N) overall would be changing the API to a single call:
+	// either return all [matched?] names, or itself adds the matches.
+
+	static int n;
+	static struct var *vp;
+
+	if (i != 0) {
+		if (n == VTABSIZE)
+			return 0;
+		goto next;
+	}
+
+	for (n = 0; n < VTABSIZE; ++n) {
+		for (vp = vartab[n]; vp; vp = vp->next) {
+			return vp->var_text;
+next:			;  // c99 null statement for the label
+		}
+	}
+
+	return 0;
+#endif
 }
 #endif
 
