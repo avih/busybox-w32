@@ -10852,6 +10852,7 @@ evalpipe(union node *n, int flags)
 /* setinteractive needs this forward reference */
 #if ENABLE_FEATURE_TAB_COMPLETION
 static const char *ash_command_name(int i) FAST_FUNC;
+static const char *ash_var_env(int i) FAST_FUNC;
 #endif
 
 /*
@@ -10889,6 +10890,7 @@ setinteractive(int on)
 			line_input_state = new_line_input_t(FOR_SHELL | WITH_PATH_LOOKUP);
 # if ENABLE_FEATURE_TAB_COMPLETION
 			line_input_state->get_exe_name = ash_command_name;
+			line_input_state->get_var_env = ash_var_env;
 #  if ENABLE_ASH_GLOB_OPTIONS
 			line_input_state->sh_accept_glob = ash_accept_glob;
 #  endif
@@ -11449,6 +11451,22 @@ ash_command_name(int i)
 #endif
 
 	return NULL;
+}
+
+static const char * FAST_FUNC
+ash_var_env(int i)
+{
+	int n;
+	struct var *vp;
+
+	for (n = 0; n < VTABSIZE; ++n) {
+		for (vp = vartab[n]; vp; vp = vp->next) {
+			if (--i < 0)
+				return vp->var_text;
+		}
+	}
+
+	return 0;
 }
 #endif
 

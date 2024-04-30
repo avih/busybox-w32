@@ -877,6 +877,49 @@ static NOINLINE unsigned complete_username(const char *ud)
 #  endif
 # endif  /* FEATURE_USERNAME_COMPLETION */
 
+# if ENABLE_SHELL_ASH || ENABLE_SHELL_HUSH
+/* 0 or point to [empty] VAR in ..$VAR | ..${VAR | ..${#VAR  (but not $#VAR)
+ * we simplistically exclude ..\$.. but not actually tracking quote state */
+static char *find_varname(char *input, int len)
+{
+	char *name;
+
+	while (len && BB_isalnum_or_underscore(input[len-1]))
+		--len;
+	name = input + len;
+
+	if (len && input[len-1] == '#')
+		--len;
+	if (len && input[len-1] == '{')
+		--len;
+	if (len && input[len-1] == '$' && input[len] != '#' &&
+	    (len == 1 || input[len-2] != '\\'))
+	{
+		return name;
+	}
+	return 0;
+}
+
+static NOINLINE unsigned complete_varname(const char *prefix)
+{
+	const char *e;
+	int i = 0;
+
+	/* assert(state->get_var_env); */
+	while ((e = state->get_var_env(i++))) {
+		if (is_prefixed_with(e, prefix)) {
+			char *eq = strchr(e, '=');
+			if (eq && eq != e)
+				add_match(xstrndup(e, eq - e), TRUE);
+		}
+	}
+
+	return strlen(prefix);
+}
+
+#define FIND_VAR_ONLY 3  /* must be unused at the enum below */
+# endif
+
 enum {
 	FIND_EXE_ONLY = 0,
 	FIND_DIR_ONLY = 1,
@@ -1127,6 +1170,17 @@ static NOINLINE int build_match_prefix(char *match_buf)
 
 	/* Copy in reverse order, since they overlap */
 	i = strlen(match_buf);
+
+# if ENABLE_SHELL_ASH || ENABLE_SHELL_HUSH
+	if (state->get_var_env) {
+		char *varname = find_varname(match_buf, i);
+		if (varname) {
+			while ((*match_buf++ = *varname++));
+			return FIND_VAR_ONLY;
+		}
+	}
+# endif
+
 	do {
 		int_buf[i] = (unsigned char)match_buf[i];
 		i--;
@@ -1413,6 +1467,13 @@ static NOINLINE void input_tab(smallint *lastWasTab)
 	if (state->flags & USERNAME_COMPLETION)
 		if (match_buf[0] == '~' && strchr(match_buf, '/') == NULL)
 			match_pfx_len = complete_username(match_buf);
+# endif
+
+# if ENABLE_SHELL_ASH || ENABLE_SHELL_HUSH
+	if (find_type == FIND_VAR_ONLY) {
+		if (!matches)
+			match_pfx_len = complete_varname(match_buf);
+	} else
 # endif
 	/* If complete_username() did not match,
 	 * try to match a command in $PATH, or a directory, or a file */

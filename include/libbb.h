@@ -2036,6 +2036,7 @@ typedef struct line_input_t {
 #  if ENABLE_SHELL_ASH || ENABLE_SHELL_HUSH
 	/* function to fetch additional application-specific names to match */
 	get_exe_name_t *get_exe_name;
+	get_exe_name_t *get_var_env;
 #   if ENABLE_ASH_GLOB_OPTIONS
 	sh_accept_glob_t *sh_accept_glob;
 #   endif
